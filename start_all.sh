@@ -10,7 +10,7 @@ if [ -f "./otp-test/jdk-21.0.2/bin/java" ]; then
 else
     JAVA_CMD="java"
 fi
-$JAVA_CMD -Xmx6G -jar otp-test/otp-2.5.0-shaded.jar --load --serve otp-test/ > otp_server.log 2>&1 &
+$JAVA_CMD -Xmx6G -jar otp-test/otp-2.5.0-shaded.jar --load --serve otp-test/ --port 8082 > otp_server.log 2>&1 &
 
 echo "Waiting for OTP to boot (usually ~15 seconds)..."
 sleep 5

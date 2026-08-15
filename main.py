@@ -616,7 +616,7 @@ def get_emt_wsse_header():
 
 def fetch_bus_eta_sync(stop_id: str):
     arrivals = []
-    url = f"https://servicios.emtvalencia.es/estimaciones/estimacion.php?idioma=es&parada={stop_id}&adaptados=false&getNBus=1"
+    url = f"https://servicios.emtvalencia.es/estimaciones/estimacion.php?idioma=es&parada={stop_id}&adaptados=false&getNBus=3"
     
     headers = {
         'User-Agent': 'EMT-Valencia/7.32 (Android 11)',
@@ -627,7 +627,7 @@ def fetch_bus_eta_sync(stop_id: str):
     
     import xml.etree.ElementTree as ET
     try:
-        resp = urllib.request.urlopen(req, timeout=10)
+        resp = urllib.request.urlopen(req, timeout=15)
         xml_data = resp.read().decode('utf-8', errors='ignore')
         root = ET.fromstring(xml_data)
         
@@ -821,6 +821,22 @@ def calculate_haversine(lat1, lon1, lat2, lon2):
     a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1-a))
 
+def snap_stop(lat, lng, leg_type):
+    global STOPS_CACHE
+    best_id = None
+    best_dist = 999999
+    for sid, data in STOPS_CACHE.items():
+        if data['type'] == leg_type:
+            d = calculate_haversine(lat, lng, data['lat'], data['lng'])
+            if d < best_dist:
+                best_dist = d
+                best_id = sid
+    if best_id and best_dist < 100:
+        if "-" in best_id:
+            return best_id.split("-")[-1], STOPS_CACHE[best_id]['lat'], STOPS_CACHE[best_id]['lng']
+        return best_id, STOPS_CACHE[best_id]['lat'], STOPS_CACHE[best_id]['lng']
+    return None, lat, lng
+
 @app.on_event("startup")
 async def build_graph():
     global STOPS_CACHE, TRANSIT_GRAPH
@@ -948,16 +964,28 @@ async def get_journey(orig_lat: float, orig_lng: float, dest_lat: float, dest_ln
     past_time = now - timedelta(minutes=15)
     current_time_str = past_time.strftime('%I:%M%p').lower()
     
-    OTP_URL = "http://localhost:8080/otp/routers/default/plan"
+    # CRITICAL HACK: The official Metrovalencia GTFS file has missing dates (e.g., Aug 10-15 are completely missing).
+    # To ensure OTP generates routes for all agencies, we pretend it's a known-good date from early August 
+    # that matches the current day of the week (Weekday, Saturday, or Sunday).
+    weekday = now.weekday()
+    if weekday == 5:
+        current_date_str = "08-08-2026" # Known good Saturday
+    elif weekday == 6:
+        current_date_str = "08-09-2026" # Known good Sunday
+    else:
+        current_date_str = "08-05-2026" # Known good Weekday
+    
+    OTP_URL = "http://127.0.0.1:8082/otp/routers/default/plan"
     params = {
         "fromPlace": f"{orig_lat},{orig_lng}",
         "toPlace": f"{dest_lat},{dest_lng}",
         "time": current_time_str,
-        "date": "06-30-2026",
+        "date": current_date_str,
         "mode": "TRANSIT,WALK",
         "maxWalkDistance": 2000,
         "arriveBy": "false",
-        "numItineraries": 10
+        "numItineraries": 10,
+        "searchWindow": 3600
     }
     
     import httpx
@@ -965,7 +993,7 @@ async def get_journey(orig_lat: float, orig_lng: float, dest_lat: float, dest_ln
     
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(OTP_URL, params=params, timeout=15.0)
+            response = await client.get(OTP_URL, params=params, timeout=25.0)
             
         if response.status_code != 200:
             return {"success": False, "error": "Error connecting to OTP"}
@@ -999,27 +1027,8 @@ async def get_journey(orig_lat: float, orig_lng: float, dest_lat: float, dest_ln
             if leg_type in ["metro", "tram"]:
                 lat = leg["from"]["lat"]
                 lng = leg["from"]["lon"]
-                
-                import aiosqlite
-                best_id = None
-                best_dist = 999999
-                try:
-                    async with aiosqlite.connect('stops.db') as db:
-                        cursor = await db.execute('SELECT id, lat, lng FROM stops WHERE type = ?', (leg_type,))
-                        rows = await cursor.fetchall()
-                        for r_id, r_lat, r_lng in rows:
-                            d = calculate_haversine(lat, lng, r_lat, r_lng)
-                            if d < best_dist:
-                                best_dist = d
-                                best_id = r_id
-                except Exception as e:
-                    pass
-                    
-                if best_id and best_dist < 100: # Must be within 100 meters
-                    if "-" in best_id:
-                        stop_id = best_id.split("-")[-1]
-                    else:
-                        stop_id = best_id
+                snapped_id, _, _ = snap_stop(lat, lng, leg_type)
+                if snapped_id: stop_id = snapped_id
                         
             if not stop_id: return None
             return await get_eta(stop_id, leg_type)
@@ -1040,16 +1049,38 @@ async def get_journey(orig_lat: float, orig_lng: float, dest_lat: float, dest_ln
             accumulated_time = 0
             
             for leg, eta_resp in zip(itinerary["legs"], eta_results):
+                leg_mode = leg["mode"]
+                start_id = leg["from"].get("stopId")
+                end_id = leg["to"].get("stopId")
+                start_lat = leg["from"]["lat"]
+                start_lon = leg["from"]["lon"]
+                end_lat = leg["to"]["lat"]
+                end_lon = leg["to"]["lon"]
+                
+                agency_lower = leg.get("agencyName", "").lower()
+                leg_type = "bus"
+                if "metrobus" in agency_lower: leg_type = "metrobus"
+                elif "metro valencia" in agency_lower or "metrovalencia" in agency_lower: leg_type = "metro"
+                elif "tram" in agency_lower: leg_type = "tram"
+                
+                if leg_mode != "WALK" and leg_type in ["metro", "tram"]:
+                    s_id, s_lat, s_lon = snap_stop(start_lat, start_lon, leg_type)
+                    e_id, e_lat, e_lon = snap_stop(end_lat, end_lon, leg_type)
+                    if s_id:
+                        start_id, start_lat, start_lon = s_id, s_lat, s_lon
+                    if e_id:
+                        end_id, end_lat, end_lon = e_id, e_lat, e_lon
+                        
                 clean_leg = {
-                    "mode": leg["mode"],
+                    "mode": leg_mode,
                     "start_name": leg["from"]["name"],
-                    "start_lat": leg["from"]["lat"],
-                    "start_lon": leg["from"]["lon"],
-                    "start_id": leg["from"].get("stopId"),
+                    "start_lat": start_lat,
+                    "start_lon": start_lon,
+                    "start_id": start_id,
                     "end_name": leg["to"]["name"],
-                    "end_lat": leg["to"]["lat"],
-                    "end_lon": leg["to"]["lon"],
-                    "end_id": leg["to"].get("stopId"),
+                    "end_lat": end_lat,
+                    "end_lon": end_lon,
+                    "end_id": end_id,
                     "distance": round(leg["distance"]),
                     "duration_minutes": math.ceil(leg["duration"] / 60),
                     "polyline": leg["legGeometry"]["points"]
@@ -1100,7 +1131,7 @@ async def get_journey(orig_lat: float, orig_lng: float, dest_lat: float, dest_ln
                                     if nums:
                                         eta_mins = int(nums[0])
                                         
-                                if eta_mins < (accumulated_time - 5):
+                                if eta_mins < accumulated_time:
                                     can_reach = False
                                     
                                 if not can_reach:
@@ -1108,6 +1139,7 @@ async def get_journey(orig_lat: float, orig_lng: float, dest_lat: float, dest_ln
                                     continue
                                 
                                 clean_leg["live_eta"] = arr_eta
+                                clean_leg["realtime"] = arrival.get("realtime", True)
                                 has_live = True
                                 
                                 # Re-calculate accumulated time with the real wait time
@@ -1119,7 +1151,6 @@ async def get_journey(orig_lat: float, orig_lng: float, dest_lat: float, dest_ln
                         if eta_resp and eta_resp.get("success") and not eta_resp.get("timeout"):
                             is_valid_route = False
                             break
-                            
                 clean_response["legs"].append(clean_leg)
                 
             if is_valid_route:
@@ -1199,4 +1230,4 @@ async def serve_favicon():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=5000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8877, reload=True)

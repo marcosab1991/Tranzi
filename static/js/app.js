@@ -227,10 +227,38 @@ searchInput.addEventListener('input', (e) => {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(async () => {
         try {
-            const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-            const data = await res.json();
-            if (data.success && data.data.length > 0) {
-                searchResults.innerHTML = data.data.map(stop => {
+            // Fetch Stops
+            const stopsRes = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+            const stopsData = await stopsRes.json();
+            
+            // Fetch Addresses (Nominatim)
+            const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&viewbox=-0.44,39.52,-0.30,39.42&bounded=1&limit=3`;
+            const nomRes = await fetch(nomUrl);
+            const nomData = await nomRes.json();
+            
+            let html = '';
+            
+            if (nomData && nomData.length > 0) {
+                html += '<div style="font-size:11px; color:#9ca3af; padding: 4px 10px; background: rgba(0,0,0,0.2);">Direcciones y Lugares</div>';
+                html += nomData.map(place => {
+                    const shortName = place.display_name.split(',')[0].trim();
+                    const desc = place.display_name.split(',').slice(1, 3).join(',').trim();
+                    return `
+                    <div class="search-result-item address-result" data-lat="${place.lat}" data-lng="${place.lon}" data-name="${place.display_name.replace(/'/g, "\\'")}" style="display:flex; align-items:center; gap:8px;">
+                        <span>📍</span>
+                        <div style="flex:1; display:flex; flex-direction:column;">
+                            <span style="font-size:0.9rem;">${shortName}</span>
+                            <span style="font-size:0.7rem; color:#9ca3af;">${desc}</span>
+                        </div>
+                        <button class="action-btn" style="padding: 4px 8px; font-size: 11px; white-space: nowrap;" onclick="event.stopPropagation(); planRouteTo(${place.lat}, ${place.lon}, '${shortName.replace(/'/g, "\\'")}')">Viajar</button>
+                    </div>
+                    `;
+                }).join('');
+            }
+            
+            if (stopsData.success && stopsData.data.length > 0) {
+                html += '<div style="font-size:11px; color:#9ca3af; padding: 4px 10px; background: rgba(0,0,0,0.2);">Paradas y Estaciones</div>';
+                html += stopsData.data.map(stop => {
                     const isBus = stop.type === 'bus';
                     const isTram = (stop.type === 'tram' || stop.type === 'tram_alicante');
                     const isMetrobus = stop.type === 'metrobus';
@@ -239,21 +267,25 @@ searchInput.addEventListener('input', (e) => {
                     const badgeStyle = isTram ? 'background-color: #f97316; color: white; border: none;' : (isMetrobus ? 'background-color: #FFB81C; color: black; border: none;' : '');
                     
                     return `
-                    <div class="search-result-item" data-lat="${stop.location.lat}" data-lng="${stop.location.lng}" data-id="${stop.id}">
+                    <div class="search-result-item" data-lat="${stop.location.lat}" data-lng="${stop.location.lng}" data-id="${stop.id}" data-name="${stop.name.replace(/'/g, "\\'")}" style="display:flex; align-items:center; gap:8px;">
                         <span class="line-badge ${badgeClass}" style="${badgeStyle}">${badgeText}</span>
-                        ${stop.name}
+                        <span style="flex:1;">${stop.name}</span>
+                        <button class="action-btn" style="padding: 4px 8px; font-size: 11px; white-space: nowrap;" onclick="event.stopPropagation(); planRouteTo(${stop.location.lat}, ${stop.location.lng}, '${stop.name.replace(/'/g, "\\'")}')">Viajar</button>
                     </div>
                     `;
                 }).join('');
-                searchResults.classList.remove('hidden');
-            } else {
-                searchResults.innerHTML = '<div class="search-result-item" style="color:#fca5a5;">No se encontraron resultados</div>';
-                searchResults.classList.remove('hidden');
             }
+            
+            if (html === '') {
+                html = '<div class="search-result-item" style="color:#fca5a5;">No se encontraron resultados</div>';
+            }
+            
+            searchResults.innerHTML = html;
+            searchResults.classList.remove('hidden');
         } catch (err) {
             console.error(err);
         }
-    }, 300);
+    }, 400);
 });
 
 // Handle click on search result
@@ -262,7 +294,37 @@ searchResults.addEventListener('click', (e) => {
     if (item && item.dataset.lat) {
         const lat = parseFloat(item.dataset.lat);
         const lng = parseFloat(item.dataset.lng);
+        const name = item.dataset.name || "Destino seleccionado";
+        
         map.setView([lat, lng], 18);
+        
+        if (item.classList.contains('address-result')) {
+            if (window.tempDestMarker) map.removeLayer(window.tempDestMarker);
+            const safeName = name.split(',')[0].trim().replace(/'/g, "\\'");
+            
+            const destIcon = L.divIcon({
+                className: 'custom-icon',
+                html: `<div style="
+                    width: 22px; 
+                    height: 22px; 
+                    background-color: #0ea5e9; 
+                    border: 3px solid white; 
+                    border-radius: 50%;
+                    box-shadow: 0 0 15px #0ea5e9;
+                "></div>`,
+                iconSize: [22, 22],
+                iconAnchor: [11, 11],
+                popupAnchor: [0, -13]
+            });
+            
+            window.tempDestMarker = L.marker([lat, lng], { icon: destIcon }).addTo(map);
+            window.tempDestMarker.bindPopup(`
+                <div class="popup-title">${name.split(',')[0].trim()}</div>
+                <div class="popup-type">Dirección seleccionada</div>
+                <button class="action-btn route-btn-popup" style="margin-top: 10px; width: 100%; padding: 8px; font-weight: 600;" onclick="planRouteTo(${lat}, ${lng}, '${safeName}')">Viajar hasta aquí</button>
+            `, { className: 'custom-popup' }).openPopup();
+        }
+        
         searchResults.classList.add('hidden');
         searchInput.value = '';
         headerBody.classList.add('collapsed'); // Collapse header to see map
@@ -529,12 +591,17 @@ async function loadStopData(marker, stop, filterLine = null) {
                 }
             }
             
+            const sLat = stop.location ? stop.location.lat : stop.lat;
+            const sLng = stop.location ? stop.location.lng : stop.lng;
+            const routeBtnHtml = `<button class="action-btn route-btn-popup" style="margin-top: 10px; width: 100%; padding: 8px; font-weight: 600;" onclick="planRouteTo(${sLat}, ${sLng}, '${stop.name.replace(/'/g, "\\'")}')">Viajar hasta aquí</button>`;
+            
             popup.setContent(`
                 <div class="popup-title">${stop.name}</div>
                 <div class="popup-type">${typeLabel}${data.cached ? ' <span style="color:#10b981; font-size:0.6rem;">(Cached)</span>' : ''}</div>
                 <div class="arrivals-container">
                     ${linesHtml}
                 </div>
+                ${routeBtnHtml}
             `);
         } else {
             popup.setContent(`
@@ -708,12 +775,18 @@ async function loadClusterData(marker, activeMembers) {
         linesHtml += '<div style="font-size:11px; color:#666; margin-top:8px; text-align:center;">📡 Tempos reais baseados em GPS</div>';
     }
 
+    const firstStop = activeMembers[0];
+    const sLat = firstStop.location ? firstStop.location.lat : firstStop.lat;
+    const sLng = firstStop.location ? firstStop.location.lng : firstStop.lng;
+    const safeName = names.replace(/'/g, "\\'");
+    
     popup.setContent(`
         <div class="popup-title">${names}</div>
         <div class="popup-type">Varias paradas agrupadas</div>
         <div class="arrivals-container">
             ${linesHtml}
         </div>
+        <button class="action-btn route-btn-popup" style="margin-top: 10px; width: 100%; padding: 8px; font-weight: 600;" onclick="planRouteTo(${sLat}, ${sLng}, '${safeName}')">Viajar hasta aquí</button>
     `);
 }
 
@@ -1033,7 +1106,6 @@ if ('serviceWorker' in navigator) {
 // JOURNEY PLANNER LOGIC
 // ============================================
 
-const openJourneyBtn = document.getElementById('open-journey-btn');
 const closeJourneyBtn = document.getElementById('close-journey-btn');
 const journeyPanel = document.getElementById('journey-panel');
 const journeyOriginInput = document.getElementById('journey-origin');
@@ -1041,15 +1113,31 @@ const journeyDestInput = document.getElementById('journey-dest');
 const journeySearchBtn = document.getElementById('journey-search-btn');
 const journeyResultsDiv = document.getElementById('journey-results');
 
-openJourneyBtn.addEventListener('click', () => {
-    journeyPanel.classList.remove('hidden');
-    if (!journeyOriginInput.value && typeof userCurrentLatLng !== 'undefined' && userCurrentLatLng) {
+window.planRouteTo = function(lat, lng, name) {
+    journeyDestInput.value = name;
+    journeyDestInput.dataset.lat = lat;
+    journeyDestInput.dataset.lng = lng;
+    journeyDestInput.dataset.query = name;
+
+    if (typeof userCurrentLatLng !== 'undefined' && userCurrentLatLng) {
         journeyOriginInput.value = "Mi ubicación";
-        journeyOriginInput.dataset.query = "Mi ubicación";
         journeyOriginInput.dataset.lat = userCurrentLatLng[0];
         journeyOriginInput.dataset.lng = userCurrentLatLng[1];
+        journeyOriginInput.dataset.query = "Mi ubicación";
+        
+        journeyPanel.classList.remove('hidden');
+        map.closePopup(); 
+        journeySearchBtn.click();
+    } else {
+        journeyOriginInput.value = "";
+        delete journeyOriginInput.dataset.lat;
+        delete journeyOriginInput.dataset.lng;
+        
+        journeyPanel.classList.remove('hidden');
+        map.closePopup();
+        journeyOriginInput.focus();
     }
-});
+};
 
 closeJourneyBtn.addEventListener('click', () => {
     journeyPanel.classList.add('hidden');
@@ -1253,11 +1341,18 @@ function renderJourneyResults(routes) {
         card.className = 'route-card';
         
         let totalMins = route.duration_minutes || 0;
-        let hasRealtime = true; // OTP handles real-time!
+        let hasRealtime = true;
+        let hasTransit = false;
         
         let legsHtml = '';
         
         route.legs.forEach(leg => {
+            if (leg.mode !== 'WALK') {
+                hasTransit = true;
+                if (leg.realtime === false) {
+                    hasRealtime = false;
+                }
+            }
             if (leg.mode === 'WALK') {
                 legsHtml += `<div class="route-leg">
                     <span>🚶</span> <span>Caminar ${leg.duration_minutes} min hasta <b>${leg.end_name || 'destino'}</b></span>
