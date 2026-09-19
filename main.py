@@ -472,7 +472,7 @@ async def fetch_fgv_eta(stop_id: str, city_code: str, prefix: str):
         if lat and lng:
             url_cercanos = f'https://www.fgv.es/fgv/app/es/api/v1/{city_code}/horarios-cercanos?latitud={lat}&longitud={lng}'
             try:
-                async with session.get(url_cercanos, headers={'User-Agent': 'okhttp/4.10.0', 'Accept': 'application/json'}, timeout=10) as response:
+                async with session.get(url_cercanos, headers={'User-Agent': 'okhttp/4.10.0', 'Accept': 'application/json'}, timeout=2.5) as response:
                     text = await response.text()
                     res = json.loads(text)
                     if not isinstance(res, list): res = [res]
@@ -517,7 +517,7 @@ async def fetch_fgv_eta(stop_id: str, city_code: str, prefix: str):
         if not (city_code == "A" and lat and lng):
             url_prevision = f'https://www.fgv.es/fgv/app/es/api/v1/{city_code}/horarios-prevision-3/{true_fgv_id}'
             try:
-                async with session.get(url_prevision, headers={'User-Agent': 'okhttp/4.10.0', 'Accept': 'application/json'}, timeout=10) as response:
+                async with session.get(url_prevision, headers={'User-Agent': 'okhttp/4.10.0', 'Accept': 'application/json'}, timeout=2.5) as response:
                     text = await response.text()
                     res = json.loads(text)
                     add_previsiones(res.get('previsiones', []))
@@ -540,7 +540,7 @@ async def fetch_fgv_eta(stop_id: str, city_code: str, prefix: str):
                 wp_data = f"action=formularios_ajax&data=action%3Dinfo-estacion%26id%3D{wp_id}"
                 headers = {'User-Agent': 'Mozilla/5.0', 'Content-Type': 'application/x-www-form-urlencoded'}
                 try:
-                    async with session.post(wp_url, data=wp_data, headers=headers, timeout=5) as response:
+                    async with session.post(wp_url, data=wp_data, headers=headers, timeout=2.5) as response:
                         text = await response.text()
                         try:
                             res_json = json.loads(text)
@@ -632,7 +632,7 @@ def fetch_bus_eta_sync(stop_id: str):
     
     import xml.etree.ElementTree as ET
     try:
-        resp = urllib.request.urlopen(req, timeout=15)
+        resp = urllib.request.urlopen(req, timeout=2.0)
         xml_data = resp.read().decode('utf-8', errors='ignore')
         root = ET.fromstring(xml_data)
         
@@ -691,7 +691,7 @@ async def fetch_metrobus_eta(stop_id: str):
         # 1. Try Real-Time API
         url = f"https://api.softoursistemas.com/metrobus/estimacion/ocupacion/{actual_id}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        resp = await asyncio.to_thread(urllib.request.urlopen, req, timeout=8)
+        resp = await asyncio.to_thread(urllib.request.urlopen, req, timeout=2.0)
         data = json.loads(resp.read().decode('utf-8'))
         
         arrivals = []
@@ -725,7 +725,7 @@ async def fetch_metrobus_eta(stop_id: str):
             
             sched_url = f"https://api.softoursistemas.com/metrobus/stops/code/{actual_id}/times?date={date_str}"
             s_req = urllib.request.Request(sched_url, headers={'User-Agent': 'Mozilla/5.0'})
-            s_resp = await asyncio.to_thread(urllib.request.urlopen, s_req, timeout=8)
+            s_resp = await asyncio.to_thread(urllib.request.urlopen, s_req, timeout=2.0)
             s_data = json.loads(s_resp.read().decode('utf-8'))
             
             is_realtime = False
@@ -1058,7 +1058,7 @@ async def get_journey(orig_lat: float, orig_lng: float, dest_lat: float, dest_ln
             if not stop_id: return None
             return await get_eta(stop_id, leg_type)
 
-        for itinerary in data["plan"]["itineraries"]:
+        async def process_itinerary(itinerary):
             clean_response = {
                 "duration_minutes": math.ceil(itinerary["duration"] / 60),
                 "walk_distance_meters": round(itinerary["walkDistance"]),
@@ -1185,7 +1185,15 @@ async def get_journey(orig_lat: float, orig_lng: float, dest_lat: float, dest_ln
             if is_valid_route:
                 # Update total duration to perfectly match the real-time flow
                 clean_response["duration_minutes"] = accumulated_time
-                valid_routes.append(clean_response)
+                return clean_response
+            return None
+
+        itinerary_tasks = [process_itinerary(it) for it in data["plan"]["itineraries"]]
+        processed_itineraries = await asyncio.gather(*itinerary_tasks)
+        
+        for p_it in processed_itineraries:
+            if p_it:
+                valid_routes.append(p_it)
                 
         if not valid_routes:
             return {"success": False, "error": "Ruta inválida: los transportes sugeridos no están en circulación activa en este momento."}
