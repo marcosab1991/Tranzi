@@ -642,18 +642,21 @@ def fetch_bus_eta_sync(stop_id: str):
             mins_el = bus.find('minutos')
             dest_el = bus.find('destino')
             
-            line = line_el.text if line_el is not None else ''
-            mins = mins_el.text if mins_el is not None else '?'
-            dest = dest_el.text if dest_el is not None else ''
+            line = line_el.text if line_el is not None and line_el.text is not None else ''
+            mins = mins_el.text if mins_el is not None and mins_el.text is not None else '?'
+            dest = dest_el.text if dest_el is not None and dest_el.text is not None else ''
             
+            if not line and mins == '?':
+                continue
+                
             # Clean up destination
             dest = str(dest).replace('<![CDATA[', '').replace(']]>', '')
             
             # Clean up minutes (e.g. "30 min.", "Próximo")
-            if "min" in mins.lower():
+            if mins and "min" in mins.lower():
                 mins = mins.lower().replace("min.", "").replace("min", "").strip()
                 
-            eta_val = "Próximo" if mins == "0" else f"{mins} min" if mins.isdigit() else mins
+            eta_val = "Próximo" if mins == "0" else f"{mins} min" if str(mins).isdigit() else str(mins)
             arrivals.append({
                 "line": str(line),
                 "eta": eta_val,
