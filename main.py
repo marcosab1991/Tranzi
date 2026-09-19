@@ -1000,7 +1000,7 @@ async def get_journey(orig_lat: float, orig_lng: float, dest_lat: float, dest_ln
     else:
         current_date_str = "08-05-2026" # Known good Weekday
     
-    OTP_URL = "http://127.0.0.1:8082/otp/routers/default/plan"
+    OTP_URL = "http://127.0.0.1:8080/otp/routers/default/plan"
     params = {
         "fromPlace": f"{orig_lat},{orig_lng}",
         "toPlace": f"{dest_lat},{dest_lng}",
