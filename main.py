@@ -989,16 +989,8 @@ async def get_journey(orig_lat: float, orig_lng: float, dest_lat: float, dest_ln
     past_time = now - timedelta(minutes=15)
     current_time_str = past_time.strftime('%I:%M%p').lower()
     
-    # CRITICAL HACK: The official Metrovalencia GTFS file has missing dates (e.g., Aug 10-15 are completely missing).
-    # To ensure OTP generates routes for all agencies, we pretend it's a known-good date from early August 
-    # that matches the current day of the week (Weekday, Saturday, or Sunday).
-    weekday = now.weekday()
-    if weekday == 5:
-        current_date_str = "08-08-2026" # Known good Saturday
-    elif weekday == 6:
-        current_date_str = "08-09-2026" # Known good Sunday
-    else:
-        current_date_str = "08-05-2026" # Known good Weekday
+    # We now use the current date since the GTFS files have been updated/extended
+    current_date_str = now.strftime('%m-%d-%Y')
     
     OTP_URL = "http://127.0.0.1:8080/otp/routers/default/plan"
     params = {
