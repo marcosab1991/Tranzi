@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ViaVLC - Admin Kiosks</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --surface-color: #1e293b;
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --danger: #ef4444;
+            --success: #10b981;
+            --border: #334155;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+        }
+        .container { max-width: 1000px; margin: 0 auto; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        h1 { margin: 0; font-size: 1.5rem; }
+        button { background: var(--primary); color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; }
+        button:hover { background: var(--primary-hover); }
+        button.danger { background: var(--danger); }
+        .card { background: var(--surface-color); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-muted); font-weight: 500; }
+        a { color: var(--primary); text-decoration: none; }
+        
+        /* Modal */
+        .modal-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-backdrop.hidden { display: none; }
+        .modal { background: var(--surface-color); width: 100%; max-width: 600px; border-radius: 8px; padding: 24px; max-height: 90vh; overflow-y: auto; }
+        .modal h2 { margin-top: 0; }
+        .form-group { margin-bottom: 16px; }
+        label { display: block; margin-bottom: 6px; color: var(--text-muted); font-size: 0.9rem; }
+        input[type="text"], input[type="file"] { width: 100%; padding: 10px; background: var(--bg-color); border: 1px solid var(--border); color: white; border-radius: 4px; box-sizing: border-box; }
+        
+        /* Search Stops */
+        .search-container { position: relative; }
+        .search-results { position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-color); border: 1px solid var(--border); max-height: 200px; overflow-y: auto; z-index: 10; display: none; }
+        .search-results.active { display: block; }
+        .search-item { padding: 10px; cursor: pointer; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+        .search-item:hover { background: var(--surface-color); }
+        .badge { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
+        .badge-bus { background: #ef4444; color: white; }
+        .badge-metro { background: #3b82f6; color: white; }
+        .badge-tram { background: #f97316; color: white; }
+        .badge-metrobus { background: #FFB81C; color: black; }
+        
+        /* Selected Stops List */
+        .selected-stops { list-style: none; padding: 0; margin-top: 10px; }
+        .selected-stops li { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--bg-color); border: 1px solid var(--border); margin-bottom: 8px; border-radius: 4px; }
+        .remove-btn { background: transparent; color: var(--danger); padding: 4px; font-size: 12px; }
+        .remove-btn:hover { background: rgba(239, 68, 68, 0.1); }
+        
+        .toggle-switch { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+        .toggle-switch input { display: none; }
+        .slider { width: 40px; height: 20px; background: var(--border); border-radius: 20px; position: relative; transition: 0.3s; }
+        .slider::before { content: ""; position: absolute; width: 16px; height: 16px; border-radius: 50%; left: 2px; top: 2px; background: white; transition: 0.3s; }
+        input:checked + .slider { background: var(--success); }
+        input:checked + .slider::before { transform: translateX(20px); }
+        
+        .img-preview { max-height: 50px; border-radius: 4px; margin-top: 5px; display: inline-block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Gestão de Quiosques B2B</h1>
+            <button onclick="openModal()">+ Novo Quiosque</button>
+        </header>
+
+        <div class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nome do Negócio</th>
+                        <th>Link (Slug)</th>
+                        <th>Estado</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="kiosks-table">
+                    <tr><td colspan="4" style="text-align: center;">A carregar...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div id="kiosk-modal" class="modal-backdrop hidden">
+        <div class="modal">
+            <h2 id="modal-title">Novo Quiosque</h2>
+            <form id="kiosk-form" onsubmit="saveKiosk(event)">
+                <input type="hidden" id="kiosk-id">
+                
+                <div class="form-group">
+                    <label>Nome do Negócio</label>
+                    <input type="text" id="kiosk-name" required placeholder="Ex: Café Ruzafa">
+                </div>
+                
+                <div class="form-group">
+                    <label>Slug (URL Público)</label>
+                    <input type="text" id="kiosk-slug" required placeholder="ex: cafe-ruzafa" oninput="this.value = this.value.toLowerCase().replace(/[^a-z0-9-]/g, '-')">
+                </div>
+                
+                <div class="form-group">
+                    <label>Logótipo (Upload)</label>
+                    <input type="file" id="kiosk-logo-file" accept="image/*" onchange="uploadImage(this, 'kiosk-logo')">
+                    <input type="hidden" id="kiosk-logo">
+                    <div id="logo-preview"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Imagens Promocionais (Upload Múltiplo)</label>
+                    <input type="file" id="kiosk-promo-files" accept="image/*" multiple onchange="uploadPromos(this)">
+                    <div id="promo-previews" style="display:flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Adicionar Paragens (Pesquise ou Escolha no Mapa)</label>
+                    <div class="search-container">
+                        <input type="text" id="stop-search" placeholder="Pesquisar por nome ou ID..." autocomplete="off">
+                        <div id="stop-search-results" class="search-results"></div>
+                    </div>
+                    <div id="admin-map" style="height: 250px; width: 100%; margin-top: 10px; border-radius: 4px; z-index: 1;"></div>
+                    <ul id="selected-stops-list" class="selected-stops"></ul>
+                </div>
+                
+                <div class="form-group">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="kiosk-active" checked>
+                        <div class="slider"></div>
+                        <span>Ativo</span>
+                    </label>
+                </div>
+                
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px;">
+                    <button type="button" style="background: transparent; border: 1px solid var(--border);" onclick="closeModal()">Cancelar</button>
+                    <button type="submit">Guardar Quiosque</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let currentKiosks = [];
+        let editingStops = [];
+        let editingPromos = [];
+        let adminMap = null;
+        let markersLayer = null;
+        
+        function initAdminMap() {
+            if (adminMap) return; // Already initialized
+            adminMap = L.map('admin-map').setView([39.4699, -0.3763], 13);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap &copy; CARTO'
+            }).addTo(adminMap);
+            markersLayer = L.layerGroup().addTo(adminMap);
+            
+            adminMap.on('moveend', async () => {
+                const bounds = adminMap.getBounds();
+                const res = await fetch(`/api/stops?min_lat=${bounds.getSouth()}&max_lat=${bounds.getNorth()}&min_lng=${bounds.getWest()}&max_lng=${bounds.getEast()}`);
+                const data = await res.json();
+                
+                markersLayer.clearLayers();
+                if(data.success) {
+                    data.data.forEach(stop => {
+                        const isBus = stop.type === 'bus';
+                        const isTram = (stop.type === 'tram' || stop.type === 'tram_alicante');
+                        const isMetrobus = stop.type === 'metrobus';
+                        
+                        const color = isBus ? '#ef4444' : (isTram ? '#f97316' : (isMetrobus ? '#FFB81C' : '#3b82f6'));
+                        const badgeText = isBus ? 'EMT' : (isTram ? 'TRAM' : (isMetrobus ? 'M-Bus' : 'Metro'));
+                        const badgeClass = isBus ? 'badge-bus' : (isTram ? 'badge-tram' : (isMetrobus ? 'badge-metrobus' : 'badge-metro'));
+                        
+                        const marker = L.circleMarker([stop.location.lat, stop.location.lng], {
+                            radius: 6,
+                            fillColor: color,
+                            color: '#fff',
+                            weight: 1,
+                            opacity: 1,
+                            fillOpacity: 0.8
+                        });
+                        
+                        marker.on('click', () => {
+                            const stopObj = {
+                                id: stop.id, name: stop.name, type: stop.type,
+                                badgeText: badgeText, badgeClass: badgeClass
+                            };
+                            addStopObject(stopObj);
+                        });
+                        
+                        marker.bindTooltip(`<b>${badgeText}</b> ${stop.name}`, {direction: 'top'});
+                        markersLayer.addLayer(marker);
+                    });
+                }
+            });
+        }
+        
+        async function fetchKiosks() {
+            const res = await fetch('/api/kiosks');
+            currentKiosks = await res.json();
+            renderTable();
+        }
+        
+        function renderTable() {
+            const tbody = document.getElementById('kiosks-table');
+            if (currentKiosks.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Nenhum quiosque encontrado.</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = currentKiosks.map(k => `
+                <tr>
+                    <td>
+                        <div style="display:flex; align-items:center; gap: 10px;">
+                            ${k.logo_url ? `<img src="${k.logo_url}" style="width:24px; height:24px; border-radius:4px; object-fit:cover;">` : '📺'}
+                            ${k.name}
+                        </div>
+                    </td>
+                    <td><a href="/kiosk/${k.slug}" target="_blank">/kiosk/${k.slug}</a></td>
+                    <td>
+                        <span style="color: ${k.is_active ? 'var(--success)' : 'var(--danger)'}; font-weight: 500; font-size: 0.9rem;">
+                            ● ${k.is_active ? 'Ativo' : 'Inativo'}
+                        </span>
+                    </td>
+                    <td>
+                        <button onclick="editKiosk('${k.id}')" style="padding: 6px 12px; font-size: 0.85rem;">Editar</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        
+        function openModal(kiosk = null) {
+            document.getElementById('kiosk-modal').classList.remove('hidden');
+            document.getElementById('modal-title').innerText = kiosk ? 'Editar Quiosque' : 'Novo Quiosque';
+            
+            document.getElementById('kiosk-id').value = kiosk ? kiosk.id : '';
+            document.getElementById('kiosk-name').value = kiosk ? kiosk.name : '';
+            document.getElementById('kiosk-slug').value = kiosk ? kiosk.slug : '';
+            document.getElementById('kiosk-active').checked = kiosk ? kiosk.is_active : true;
+            
+            document.getElementById('kiosk-logo').value = kiosk ? kiosk.logo_url : '';
+            document.getElementById('logo-preview').innerHTML = (kiosk && kiosk.logo_url) ? `<img src="${kiosk.logo_url}" class="img-preview">` : '';
+            
+            editingStops = kiosk ? [...kiosk.stops] : [];
+            editingPromos = kiosk ? [...kiosk.promotional_images] : [];
+            
+            renderSelectedStops();
+            renderPromoPreviews();
+            
+            setTimeout(() => {
+                initAdminMap();
+                adminMap.invalidateSize();
+                adminMap.fire('moveend'); // Fetch stops for initial view
+            }, 300);
+        }
+        
+        function closeModal() {
+            document.getElementById('kiosk-modal').classList.add('hidden');
+            document.getElementById('kiosk-form').reset();
+        }
+        
+        function editKiosk(id) {
+            const kiosk = currentKiosks.find(k => k.id === id);
+            if(kiosk) openModal(kiosk);
+        }
+        
+        async function uploadImage(input, hiddenFieldId) {
+            if(!input.files[0]) return;
+            const formData = new FormData();
+            formData.append('file', input.files[0]);
+            
+            const res = await fetch('/api/upload', { method: 'POST', body: formData });
+            const data = await res.json();
+            
+            document.getElementById(hiddenFieldId).value = data.url;
+            document.getElementById('logo-preview').innerHTML = `<img src="${data.url}" class="img-preview">`;
+        }
+        
+        async function uploadPromos(input) {
+            for(let i=0; i<input.files.length; i++) {
+                const formData = new FormData();
+                formData.append('file', input.files[i]);
+                const res = await fetch('/api/upload', { method: 'POST', body: formData });
+                const data = await res.json();
+                editingPromos.push(data.url);
+            }
+            renderPromoPreviews();
+        }
+        
+        function removePromo(index) {
+            editingPromos.splice(index, 1);
+            renderPromoPreviews();
+        }
+        
+        function renderPromoPreviews() {
+            document.getElementById('promo-previews').innerHTML = editingPromos.map((url, i) => `
+                <div style="position:relative; width: 60px; height: 60px;">
+                    <img src="${url}" style="width:100%; height:100%; object-fit:cover; border-radius:4px;">
+                    <button type="button" onclick="removePromo(${i})" style="position:absolute; top:-5px; right:-5px; width:20px; height:20px; padding:0; font-size:10px; background:var(--danger); border-radius:50%; color:white; border:none; cursor:pointer;">×</button>
+                </div>
+            `).join('');
+        }
+        
+        // Stop Autocomplete Search
+        let searchTimeout;
+        const searchInput = document.getElementById('stop-search');
+        const searchResults = document.getElementById('stop-search-results');
+        
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            const query = e.target.value.trim();
+            if(query.length < 2) {
+                searchResults.classList.remove('active');
+                return;
+            }
+            
+            searchTimeout = setTimeout(async () => {
+                const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+                const data = await res.json();
+                if(data.success && data.data.length > 0) {
+                    const stops = data.data;
+                    searchResults.innerHTML = stops.map(stop => {
+                        const isBus = stop.type === 'bus';
+                        const isTram = (stop.type === 'tram' || stop.type === 'tram_alicante');
+                        const isMetrobus = stop.type === 'metrobus';
+                        const badgeClass = isBus ? 'badge-bus' : (isTram ? 'badge-tram' : (isMetrobus ? 'badge-metrobus' : 'badge-metro'));
+                        const badgeText = isBus ? 'EMT' : (isTram ? 'TRAM' : (isMetrobus ? 'M-Bus' : 'Metro'));
+                        
+                        const stopJSON = encodeURIComponent(JSON.stringify({
+                            id: stop.id, name: stop.name, type: stop.type, 
+                            badgeText: badgeText, badgeClass: badgeClass
+                        }));
+                        
+                        return `
+                        <div class="search-item" onclick="addStop('${stopJSON}')">
+                            <span class="badge ${badgeClass}">${badgeText}</span>
+                            <span>${stop.name} (${stop.id})</span>
+                        </div>
+                        `;
+                    }).join('');
+                    searchResults.classList.add('active');
+                } else {
+                    searchResults.innerHTML = '<div class="search-item">Sem resultados</div>';
+                    searchResults.classList.add('active');
+                }
+            }, 300);
+        });
+        
+        function addStop(stopJSONencoded) {
+            const stop = JSON.parse(decodeURIComponent(stopJSONencoded));
+            addStopObject(stop);
+        }
+        
+        function addStopObject(stop) {
+            if(!editingStops.find(s => s.id === stop.id)) {
+                editingStops.push(stop);
+                renderSelectedStops();
+            }
+            searchResults.classList.remove('active');
+            searchInput.value = '';
+        }
+        
+        function removeStop(id) {
+            editingStops = editingStops.filter(s => s.id !== id);
+            renderSelectedStops();
+        }
+        
+        function renderSelectedStops() {
+            document.getElementById('selected-stops-list').innerHTML = editingStops.map(stop => `
+                <li>
+                    <div>
+                        <span class="badge ${stop.badgeClass}">${stop.badgeText}</span>
+                        <span style="margin-left:8px;">${stop.name}</span>
+                    </div>
+                    <button type="button" class="remove-btn" onclick="removeStop('${stop.id}')">Remover</button>
+                </li>
+            `).join('');
+        }
+        
+        async function saveKiosk(e) {
+            e.preventDefault();
+            const id = document.getElementById('kiosk-id').value;
+            const payload = {
+                name: document.getElementById('kiosk-name').value,
+                slug: document.getElementById('kiosk-slug').value,
+                logo_url: document.getElementById('kiosk-logo').value,
+                stops: editingStops,
+                promotional_images: editingPromos,
+                is_active: document.getElementById('kiosk-active').checked
+            };
+            
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/kiosks/${id}` : '/api/kiosks';
+            
+            await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            closeModal();
+            fetchKiosks();
+        }
+        
+        // Init
+        fetchKiosks();
+    </script>
+</body>
+</html>

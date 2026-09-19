@@ -20,6 +20,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional
+from fastapi import Depends, UploadFile, File, Form, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import uuid
+import secrets
+import shutil
 
 def remove_accents(input_str):
     if not input_str:
@@ -847,6 +852,23 @@ async def build_graph():
     TRANSFER_PENALTY = 5 # minutes
     
     try:
+        import os
+        os.makedirs("static/uploads", exist_ok=True)
+        
+        async with aiosqlite.connect('kiosks.db') as db:
+            await db.execute('''
+                CREATE TABLE IF NOT EXISTS kiosks (
+                    id TEXT PRIMARY KEY,
+                    name TEXT,
+                    slug TEXT UNIQUE,
+                    logo_url TEXT,
+                    stops TEXT,
+                    promotional_images TEXT,
+                    is_active BOOLEAN
+                )
+            ''')
+            await db.commit()
+            
         async with aiosqlite.connect('stops.db') as db:
             cursor = await db.execute("SELECT id, lat, lng, type, name FROM stops")
             rows = await cursor.fetchall()
@@ -1205,6 +1227,89 @@ async def get_journey(orig_lat: float, orig_lng: float, dest_lat: float, dest_ln
         import traceback
         traceback.print_exc()
         return {"success": False, "error": str(e)}
+
+# ==========================================
+# KIOSK B2B MODULE
+# ==========================================
+security = HTTPBasic()
+
+def get_current_username(credentials: HTTPBasicCredentials = Depends(security)):
+    correct_username = secrets.compare_digest(credentials.username, "admin")
+    correct_password = secrets.compare_digest(credentials.password, "adminvlc26")
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
+@app.get("/admin", response_class=FileResponse)
+async def admin_dashboard(username: str = Depends(get_current_username)):
+    return "static/admin.html"
+
+@app.get("/kiosk/{slug}", response_class=FileResponse)
+async def kiosk_view(slug: str):
+    return "static/kiosk.html"
+
+@app.get("/api/kiosks")
+async def get_kiosks(username: str = Depends(get_current_username)):
+    async with aiosqlite.connect('kiosks.db') as db:
+        cursor = await db.execute("SELECT id, name, slug, logo_url, stops, promotional_images, is_active FROM kiosks")
+        rows = await cursor.fetchall()
+        kiosks = []
+        for r in rows:
+            kiosks.append({
+                "id": r[0], "name": r[1], "slug": r[2], "logo_url": r[3],
+                "stops": json.loads(r[4]) if r[4] else [],
+                "promotional_images": json.loads(r[5]) if r[5] else [],
+                "is_active": bool(r[6])
+            })
+        return kiosks
+
+@app.post("/api/kiosks")
+async def create_kiosk(kiosk: dict, username: str = Depends(get_current_username)):
+    kid = str(uuid.uuid4())
+    async with aiosqlite.connect('kiosks.db') as db:
+        await db.execute(
+            "INSERT INTO kiosks (id, name, slug, logo_url, stops, promotional_images, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (kid, kiosk.get('name'), kiosk.get('slug'), kiosk.get('logo_url', ''), json.dumps(kiosk.get('stops', [])), json.dumps(kiosk.get('promotional_images', [])), kiosk.get('is_active', True))
+        )
+        await db.commit()
+    return {"success": True, "id": kid}
+
+@app.put("/api/kiosks/{kid}")
+async def update_kiosk(kid: str, kiosk: dict, username: str = Depends(get_current_username)):
+    async with aiosqlite.connect('kiosks.db') as db:
+        await db.execute(
+            "UPDATE kiosks SET name=?, slug=?, logo_url=?, stops=?, promotional_images=?, is_active=? WHERE id=?",
+            (kiosk.get('name'), kiosk.get('slug'), kiosk.get('logo_url', ''), json.dumps(kiosk.get('stops', [])), json.dumps(kiosk.get('promotional_images', [])), kiosk.get('is_active', True), kid)
+        )
+        await db.commit()
+    return {"success": True}
+
+@app.post("/api/upload")
+async def upload_file(file: UploadFile = File(...), username: str = Depends(get_current_username)):
+    filename = f"{uuid.uuid4()}_{file.filename.replace(' ', '_')}"
+    filepath = f"static/uploads/{filename}"
+    with open(filepath, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    return {"url": f"/static/uploads/{filename}"}
+
+@app.get("/api/kiosk/{slug}")
+async def get_kiosk_data(slug: str):
+    async with aiosqlite.connect('kiosks.db') as db:
+        cursor = await db.execute("SELECT id, name, slug, logo_url, stops, promotional_images, is_active FROM kiosks WHERE slug=?", (slug,))
+        r = await cursor.fetchone()
+        if not r:
+            raise HTTPException(status_code=404, detail="Kiosk not found")
+        if not r[6]:
+            raise HTTPException(status_code=403, detail="Kiosk is inactive")
+        return {
+            "id": r[0], "name": r[1], "slug": r[2], "logo_url": r[3],
+            "stops": json.loads(r[4]) if r[4] else [],
+            "promotional_images": json.loads(r[5]) if r[5] else []
+        }
 
 # Serve static files
 app.mount("/css", StaticFiles(directory="static/css"), name="css")

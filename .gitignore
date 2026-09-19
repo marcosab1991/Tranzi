@@ -29,3 +29,5 @@ check*.py
 patch*.py
 trace*.py
 otp-test/*.pbf
+kiosks.db
+static/uploads/
