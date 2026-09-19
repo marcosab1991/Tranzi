@@ -1176,6 +1176,10 @@ async def get_journey(orig_lat: float, orig_lng: float, dest_lat: float, dest_ln
                         if eta_resp and eta_resp.get("success") and not eta_resp.get("timeout"):
                             is_valid_route = False
                             break
+                        else:
+                            # It failed or timed out or has no live support, just add the scheduled duration + 5 mins avg wait
+                            accumulated_time += clean_leg["duration_minutes"] + 5
+                            
                 clean_response["legs"].append(clean_leg)
                 
             if is_valid_route:
