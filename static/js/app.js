@@ -875,10 +875,14 @@ async function drawRoute(line, type, originStopId = null, destination = null, or
         
         const isTram = (type === 'tram' || type === 'tram_alicante');
         const isMetrobus = type === 'metrobus';
+        const isTmbBus = type === 'tmb_bus';
+        const isTmbMetro = type === 'tmb_metro';
         const colorsMap = isTram ? tramColors : metroColors;
         let routeColor = '#ef4444';
         if (isTram) routeColor = colorsMap[line] || '#f97316';
         else if (type === 'metro') routeColor = colorsMap[line] || '#3b82f6';
+        else if (isTmbMetro && typeof tmbMetroColors !== 'undefined') routeColor = tmbMetroColors[line] || '#E2001A';
+        else if (isTmbBus) routeColor = '#E2001A';
         else if (isMetrobus) routeColor = '#FFB81C';
         
         if (currentRouteLayer) map.removeLayer(currentRouteLayer);
