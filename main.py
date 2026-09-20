@@ -400,6 +400,32 @@ async def get_line_geometry(line: str, type: str = "bus", destination: str = "",
         traceback.print_exc()
         return {"success": False, "error": str(e)}
 
+
+import aiohttp
+
+TMB_APP_ID = "22b90d81"
+TMB_APP_KEY = "529556e542a70f94952dab25eac1bb7f"
+
+async def fetch_tmb_eta(line: str, stop_code: str):
+    url = f"https://api.tmb.cat/v1/ibus/lines/{line}/stops/{stop_code}?app_id={TMB_APP_ID}&app_key={TMB_APP_KEY}"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=2.5) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    arrivals = data.get("data", {}).get("ibus", [])
+                    res = []
+                    for arr in arrivals:
+                        res.append({
+                            "line": arr.get("line"),
+                            "destination": arr.get("destination"),
+                            "eta": int(arr.get("t-in-min", 0))
+                        })
+                    return res
+    except Exception as e:
+        print(f"TMB ETA Error: {e}")
+    return []
+
 async def fetch_fgv_eta(stop_id: str, city_code: str, prefix: str):
     clean_id = stop_id.replace(prefix, "")
     
@@ -806,6 +832,10 @@ async def get_eta(id: str, type: str, response: Response = None):
             arrivals = await fetch_fgv_eta(id, "A", "tram_alicante-")
         elif type == "metrobus":
             arrivals = await fetch_metrobus_eta(id)
+        elif type == "tmb":
+            parts = id.split("_")
+            if len(parts) == 2:
+                arrivals = await fetch_tmb_eta(parts[0], parts[1])
         else:
             return {"success": False, "error": "Unknown transport type"}
         
@@ -1035,9 +1065,20 @@ async def get_journey(orig_lat: float, orig_lng: float, dest_lat: float, dest_ln
             if "metrobus" in agency_lower: leg_type = "metrobus"
             elif "metro valencia" in agency_lower or "metrovalencia" in agency_lower: leg_type = "metro"
             elif "tram" in agency_lower: leg_type = "tram"
+            elif "tmb" in agency_lower: leg_type = "tmb"
             
             stop_id = leg["from"].get("stopId", "")
             if ":" in stop_id: stop_id = stop_id.split(":")[-1]
+            
+            if leg_type == "tmb":
+                stop_code = leg["from"].get("stopCode", "")
+                if not stop_code:
+                    parts = stop_id.split(".")
+                    if len(parts) >= 2: stop_code = parts[1]
+                    else: stop_code = stop_id
+                line = leg.get("routeShortName", "")
+                stop_id = f"{line}_{stop_code}"
+                if not line: return None
             
             # CRITICAL FIX: GTFS stop IDs for Metro/Tram (e.g. 41) DO NOT match the internal FGV real-time API IDs (e.g. 57)
             # We must map them by finding the geographically closest stop in our stops.db, just like the frontend popup does.
@@ -1079,6 +1120,7 @@ async def get_journey(orig_lat: float, orig_lng: float, dest_lat: float, dest_ln
                 if "metrobus" in agency_lower: leg_type = "metrobus"
                 elif "metro valencia" in agency_lower or "metrovalencia" in agency_lower: leg_type = "metro"
                 elif "tram" in agency_lower: leg_type = "tram"
+                elif "tmb" in agency_lower: leg_type = "tmb"
                 
                 if leg_mode != "WALK" and leg_type in ["metro", "tram"]:
                     s_id, s_lat, s_lon = snap_stop(start_lat, start_lon, leg_type)
@@ -1202,7 +1244,7 @@ async def get_journey(orig_lat: float, orig_lng: float, dest_lat: float, dest_ln
             for leg in r["legs"]:
                 if leg["mode"] != "WALK":
                     agency_lower = leg.get("agency", "").lower()
-                    if "metro valencia" in agency_lower or "metrovalencia" in agency_lower or "tram" in agency_lower:
+                    if "metro valencia" in agency_lower or "metrovalencia" in agency_lower or "tram" in agency_lower or ("tmb" in agency_lower and leg["mode"] != "BUS"):
                         is_rail = True
                     else:
                         is_bus = True

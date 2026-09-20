@@ -17,6 +17,23 @@ L.control.zoom({
     position: 'bottomright'
 }).addTo(map);
 
+// Geolocation center
+map.locate({setView: true, maxZoom: 16});
+map.on('locationfound', (e) => {
+    // add a small dot for the user location
+    L.circleMarker(e.latlng, {
+        radius: 6,
+        fillColor: "#007AFF",
+        color: "#ffffff",
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 1
+    }).addTo(map);
+});
+map.on('locationerror', (e) => {
+    console.warn("Could not find location:", e.message);
+});
+
 // Custom Icons
 const createIcon = (color) => {
     return L.divIcon({
