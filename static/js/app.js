@@ -239,7 +239,7 @@ searchInput.addEventListener('input', (e) => {
             const stopsData = await stopsRes.json();
             
             // Fetch Addresses (Nominatim)
-            const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&viewbox=-0.44,39.52,-0.30,39.42&bounded=1&limit=3`;
+            const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&countrycodes=es&limit=4`;
             const nomRes = await fetch(nomUrl);
             const nomData = await nomRes.json();
             
@@ -269,9 +269,14 @@ searchInput.addEventListener('input', (e) => {
                     const isBus = stop.type === 'bus';
                     const isTram = (stop.type === 'tram' || stop.type === 'tram_alicante');
                     const isMetrobus = stop.type === 'metrobus';
-                    const badgeClass = isBus ? 'bus-line' : (isTram ? 'tram-line' : (isMetrobus ? 'metrobus-line' : 'metro-line'));
-                    const badgeText = isBus ? 'EMT' : (isTram ? 'TRAM' : (isMetrobus ? 'M-Bus' : 'Metro'));
-                    const badgeStyle = isTram ? 'background-color: #f97316; color: white; border: none;' : (isMetrobus ? 'background-color: #FFB81C; color: black; border: none;' : '');
+                    const isTmbBus = stop.type === 'tmb_bus';
+                    const isTmbMetro = stop.type === 'tmb_metro';
+                    const badgeClass = (isBus || isTmbBus) ? 'bus-line' : (isTram ? 'tram-line' : (isMetrobus ? 'metrobus-line' : 'metro-line'));
+                    let badgeText = isBus ? 'EMT' : (isTram ? 'TRAM' : (isMetrobus ? 'M-Bus' : 'Metro'));
+                    if (isTmbBus) badgeText = 'TMB Bus';
+                    if (isTmbMetro) badgeText = 'TMB Metro';
+                    let badgeStyle = isTram ? 'background-color: #f97316; color: white; border: none;' : (isMetrobus ? 'background-color: #FFB81C; color: black; border: none;' : '');
+                    if (isTmbBus || isTmbMetro) badgeStyle = 'background-color: #E2001A; color: white; border: none;';
                     
                     return `
                     <div class="search-result-item" data-lat="${stop.location.lat}" data-lng="${stop.location.lng}" data-id="${stop.id}" data-name="${stop.name.replace(/'/g, "\\'")}" style="display:flex; align-items:center; gap:8px;">
