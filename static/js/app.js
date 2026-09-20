@@ -557,7 +557,9 @@ async function loadStopData(marker, stop, filterLine = null) {
             let arrivals = data.data;
             
             if (arrivals.length === 0) {
-                linesHtml = stop.type === 'metrobus' ? '<div class="no-data">No hay estimativas teóricas ni en tiempo real para las próximas horas.</div>' : '<div class="no-data">No hay próximas llegadas en tiempo real en esta parada.</div>';
+                if (stop.type === 'metrobus') linesHtml = '<div class="no-data">No hay estimativas teóricas ni en tiempo real para las próximas horas.</div>';
+                else if (stop.type === 'tmb_metro') linesHtml = '<div class="no-data" style="padding:10px;text-align:center;">🌙 La API oficial de TMB no proporciona tiempos en vivo para el Metro.<br><br>Usa la búsqueda de rutas para ver los horarios.</div>';
+                else linesHtml = '<div class="no-data" style="padding:10px;text-align:center;">🌙 No hay vehículos en circulación detectados para esta parada en este momento.</div>';
             } else {
                 const hasTheoretical = arrivals.some(a => a.realtime === false);
                 const lineClass = isBus ? 'bus-line' : (isTram ? 'tram-line' : (isMetrobus ? 'metrobus-line' : 'metro-line'));
@@ -711,10 +713,18 @@ async function loadClusterData(marker, activeMembers) {
     allArrivals = uniqueArrivals;
     
     if (allArrivals.length === 0) {
-        popup.setContent(`
-            <div class="popup-title">${names}</div>
-            <div class="error-msg">No hay llegadas en tiempo real para estas paradas.</div>
-        `);
+        let isTmbMetro = activeMembers.some(m => m.type === 'tmb_metro');
+        if (isTmbMetro) {
+            popup.setContent(`
+                <div class="popup-title">${names}</div>
+                <div class="error-msg" style="padding:15px;text-align:center;">🌙 La API oficial de TMB no proporciona tiempos en vivo para el Metro.<br><br>Usa la búsqueda de rutas para ver los horarios.</div>
+            `);
+        } else {
+            popup.setContent(`
+                <div class="popup-title">${names}</div>
+                <div class="error-msg" style="padding:15px;text-align:center;">🌙 No hay vehículos en circulación detectados para estas paradas en este momento.</div>
+            `);
+        }
         return;
     }
     
