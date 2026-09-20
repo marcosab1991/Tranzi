@@ -561,6 +561,27 @@ async function loadStopData(marker, stop, filterLine = null) {
                 else if (stop.type === 'tmb_metro') linesHtml = '<div class="no-data" style="padding:10px;text-align:center;">🌙 La API oficial de TMB no proporciona tiempos en vivo para esta estación.<br><br>Usa la búsqueda de rutas para ver los horarios.</div>';
                 else linesHtml = '<div class="no-data" style="padding:10px;text-align:center;">🌙 No hay vehículos en circulación detectados para esta parada en este momento.</div>';
             } else {
+                arrivals.sort((a, b) => {
+                    const extractMin = (str) => {
+                        str = String(str);
+                        if (!str) return 999;
+                        const lowerStr = str.toLowerCase();
+                        if (lowerStr.includes('pròxim') || lowerStr.includes('proxim') || lowerStr.includes('próxim')) return 0;
+                        if (str.includes(':')) {
+                            const parts = str.split(':');
+                            if (parts.length >= 2) {
+                                const now = new Date();
+                                let waitMins = (parseInt(parts[0]) - now.getHours()) * 60 + (parseInt(parts[1]) - now.getMinutes());
+                                if (waitMins < -12 * 60) waitMins += 24 * 60;
+                                return waitMins;
+                            }
+                        }
+                        const m = str.match(/\d+/);
+                        return m ? parseInt(m[0]) : 999;
+                    };
+                    return extractMin(a.eta) - extractMin(b.eta);
+                });
+                
                 const hasTheoretical = arrivals.some(a => a.realtime === false);
                 const lineClass = isBus ? 'bus-line' : (isTram ? 'tram-line' : (isMetrobus ? 'metrobus-line' : 'metro-line'));
                 linesHtml = arrivals.map(arrival => {
@@ -730,6 +751,7 @@ async function loadClusterData(marker, activeMembers) {
     
     allArrivals.sort((a, b) => {
         const extractMin = (str) => {
+            str = String(str);
             if (!str) return 999;
             const lowerStr = str.toLowerCase();
             if (lowerStr.includes('pròxim') || lowerStr.includes('proxim') || lowerStr.includes('próxim')) return 0;
