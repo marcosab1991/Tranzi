@@ -558,7 +558,7 @@ async function loadStopData(marker, stop, filterLine = null) {
             
             if (arrivals.length === 0) {
                 if (stop.type === 'metrobus') linesHtml = '<div class="no-data">No hay estimativas teóricas ni en tiempo real para las próximas horas.</div>';
-                else if (stop.type === 'tmb_metro') linesHtml = '<div class="no-data" style="padding:10px;text-align:center;">🌙 La API oficial de TMB no proporciona tiempos en vivo para el Metro.<br><br>Usa la búsqueda de rutas para ver los horarios.</div>';
+                else if (stop.type === 'tmb_metro') linesHtml = '<div class="no-data" style="padding:10px;text-align:center;">🌙 La API oficial de TMB no proporciona tiempos en vivo para esta estación.<br><br>Usa la búsqueda de rutas para ver los horarios.</div>';
                 else linesHtml = '<div class="no-data" style="padding:10px;text-align:center;">🌙 No hay vehículos en circulación detectados para esta parada en este momento.</div>';
             } else {
                 const hasTheoretical = arrivals.some(a => a.realtime === false);
@@ -574,8 +574,8 @@ async function loadStopData(marker, stop, filterLine = null) {
                     
                     let displayEta = String(arrival.eta);
                     let iconHtml = arrival.realtime === false 
-                        ? '<span style="margin-right:4px; font-size:12px;" title="Horário Teórico">📅</span> ' 
-                        : '<span style="margin-right:4px; font-size:12px; color:#10b981;" title="Tempo Real (GPS)">📡</span> ';
+                        ? '<span style="margin-right:4px; font-size:12px;" title="Horario Teórico">📅</span> ' 
+                        : '<span style="margin-right:4px; font-size:12px; color:#10b981;" title="Tiempo Real (GPS)">📡</span> ';
                     
                     if (displayEta.includes(':')) {
                         const parts = displayEta.split(':');
@@ -717,7 +717,7 @@ async function loadClusterData(marker, activeMembers) {
         if (isTmbMetro) {
             popup.setContent(`
                 <div class="popup-title">${names}</div>
-                <div class="error-msg" style="padding:15px;text-align:center;">🌙 La API oficial de TMB no proporciona tiempos en vivo para el Metro.<br><br>Usa la búsqueda de rutas para ver los horarios.</div>
+                <div class="error-msg" style="padding:15px;text-align:center;">🌙 La API oficial de TMB no proporciona tiempos en vivo para esta estación.<br><br>Usa la búsqueda de rutas para ver los horarios.</div>
             `);
         } else {
             popup.setContent(`
@@ -772,8 +772,8 @@ async function loadClusterData(marker, activeMembers) {
         
         let displayEta = String(arrival.eta);
         let iconHtml = arrival.realtime === false 
-            ? '<span style="margin-right:4px; font-size:12px;" title="Horário Teórico">📅</span> ' 
-            : '<span style="margin-right:4px; font-size:12px; color:#10b981;" title="Tempo Real (GPS)">📡</span> ';
+            ? '<span style="margin-right:4px; font-size:12px;" title="Horario Teórico">📅</span> ' 
+            : '<span style="margin-right:4px; font-size:12px; color:#10b981;" title="Tiempo Real (GPS)">📡</span> ';
         
         if (displayEta.includes(':')) {
             const parts = displayEta.split(':');

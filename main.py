@@ -406,6 +406,27 @@ import aiohttp
 TMB_APP_ID = "22b90d81"
 TMB_APP_KEY = "529556e542a70f94952dab25eac1bb7f"
 
+async def fetch_tmb_metro_eta(stop_code: str):
+    url = f"https://api.tmb.cat/v1/imetro/estacions/{stop_code}?app_id={TMB_APP_ID}&app_key={TMB_APP_KEY}"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=2.5) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    res = []
+                    for via in data:
+                        for arr in via.get("propers_trens", []):
+                            mins = int(arr.get("temps_restant", 0)) // 60
+                            res.append({
+                                "line": arr.get("nom_linia"),
+                                "destination": arr.get("desti_trajecte"),
+                                "eta": mins
+                            })
+                    return res
+    except Exception as e:
+        print(f"TMB Metro ETA Error: {e}")
+    return []
+
 async def fetch_tmb_eta(line: str, stop_code: str):
     if line == "tmb":
         url = f"https://api.tmb.cat/v1/ibus/stops/{stop_code}?app_id={TMB_APP_ID}&app_key={TMB_APP_KEY}"
@@ -838,7 +859,10 @@ async def get_eta(id: str, type: str, response: Response = None):
         elif type.startswith("tmb"):
             parts = id.split("_")
             if len(parts) == 2:
-                arrivals = await fetch_tmb_eta(parts[0], parts[1])
+                if type == "tmb_metro":
+                    arrivals = await fetch_tmb_metro_eta(parts[1])
+                else:
+                    arrivals = await fetch_tmb_eta(parts[0], parts[1])
         else:
             return {"success": False, "error": "Unknown transport type"}
         
