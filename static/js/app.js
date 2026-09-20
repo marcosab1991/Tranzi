@@ -37,10 +37,26 @@ const createIcon = (color) => {
     });
 };
 
+const createMetroIcon = () => {
+    return L.divIcon({
+        className: 'custom-icon',
+        html: `<div style="
+            width: 16px; 
+            height: 16px; 
+            background-color: white; 
+            border: 3px solid #ef4444; 
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.6);
+        "></div>`,
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+    });
+};
+
 const busIcon = createIcon('#ef4444');
 const tmbBusIcon = createIcon('#E2001A');
-const tmbMetroIcon = createIcon('#E2001A');
-const metroIcon = createIcon('#3b82f6');
+const tmbMetroIcon = createMetroIcon();
+const metroIcon = createMetroIcon();
 const tramIcon = createIcon('#f97316'); // Orange for TRAM
 const metrobusIcon = createIcon('#FFB81C'); // Yellow for Metrobús
 
