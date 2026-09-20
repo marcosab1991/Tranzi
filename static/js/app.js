@@ -486,13 +486,45 @@ function renderMarkers(stops) {
             else if (type === 'metrobus') icon = metrobusIcon;
             else icon = metroIcon;
         } else {
-            if (types.includes('bus') && types.includes('metrobus') && types.length === 2) {
-                icon = createHybridIcon('#ef4444', '#FFB81C');
-            } else if (types.includes('bus') && types.includes('metro')) {
-                icon = createHybridIcon('#ef4444', '#3b82f6');
+            const getColor = (t) => {
+                if (t === 'bus') return '#ef4444';
+                if (t === 'tmb_bus') return '#E2001A';
+                if (t === 'tmb_metro' || t === 'metro') return '#ffffff';
+                if (t === 'tram' || t === 'tram_alicante') return '#f97316';
+                if (t === 'metrobus') return '#FFB81C';
+                return '#3b82f6';
+            };
+            let c1 = getColor(types[0]);
+            let c2 = getColor(types[1]);
+            
+            // if a stop has more than 2 types (rare), we just pick the first two distinct colors
+            let uniqueColors = [...new Set(types.map(getColor))];
+            if (uniqueColors.length >= 2) {
+                c1 = uniqueColors[0];
+                c2 = uniqueColors[1];
             } else {
-                icon = createHybridIcon('#ef4444', '#FFB81C'); // fallback
+                c2 = uniqueColors[0];
             }
+
+            // For hybrid icons where one is Metro (white), change the border to red!
+            let borderColor = 'white';
+            if (c1 === '#ffffff' || c2 === '#ffffff') {
+                borderColor = '#ef4444'; // Red border if there is metro
+            }
+            
+            icon = L.divIcon({
+                className: 'custom-icon',
+                html: `<div style="
+                    width: 100%;
+                    height: 100%;
+                    border-radius: 50%;
+                    background: linear-gradient(135deg, ${c1} 50%, ${c2} 50%);
+                    border: 2.5px solid ${borderColor};
+                    box-shadow: 0 0 10px rgba(0,0,0,0.3);
+                "></div>`,
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
+            });
         }
         
         const marker = L.marker([cluster.location.lat, cluster.location.lng], { icon });
