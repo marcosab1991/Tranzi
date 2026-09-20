@@ -53,6 +53,8 @@ const createIcon = (color) => {
 };
 
 const busIcon = createIcon('#ef4444');
+const tmbBusIcon = createIcon('#E2001A');
+const tmbMetroIcon = createIcon('#E2001A');
 const metroIcon = createIcon('#3b82f6');
 const tramIcon = createIcon('#f97316'); // Orange for TRAM
 const metrobusIcon = createIcon('#FFB81C'); // Yellow for Metrobús
@@ -147,7 +149,9 @@ let showNetwork = {
     bus: true,
     metro: true,
     tram: true,
-    metrobus: true
+    metrobus: true,
+    tmb_bus: true,
+    tmb_metro: true
 };
 
 // Transport Filters (using Legend)
@@ -179,6 +183,7 @@ if (zoneSelector) {
     });
 }
 
+const tmbMetroColors = { 'L1': '#E2001A', 'L2': '#911082', 'L3': '#009033', 'L4': '#FFB81C', 'L5': '#0047BA', 'L9N': '#F58220', 'L9S': '#F58220', 'L10N': '#00B1E7', 'L10S': '#00B1E7', 'L11': '#8FC640' };
 const metroColors = {
     'L1': '#e4be36',
     'L2': '#b4397f',
@@ -442,7 +447,13 @@ function renderMarkers(stops) {
     
     clusters.forEach(cluster => {
         // Filter members by active networks
-        const activeMembers = cluster.members.filter(m => m.type === 'tram_alicante' ? showNetwork['tram'] : showNetwork[m.type]);
+        const activeMembers = cluster.members.filter(m => {
+    let type = m.type;
+    if (type === 'tram_alicante') type = 'tram';
+    if (type === 'tmb_bus') type = 'bus';
+    if (type === 'tmb_metro') type = 'metro';
+    return showNetwork[type];
+});
         if (activeMembers.length === 0) return;
         
         const activeIds = activeMembers.map(m => m.id).sort().join('-');
@@ -462,7 +473,12 @@ function renderMarkers(stops) {
         const types = [...new Set(activeMembers.map(m => m.type))];
         if (types.length === 1) {
             const type = types[0];
-            icon = type === 'bus' ? busIcon : ((type === 'tram' || type === 'tram_alicante') ? tramIcon : (type === 'metrobus' ? metrobusIcon : metroIcon));
+            if (type === 'bus') icon = busIcon;
+            else if (type === 'tmb_bus') icon = tmbBusIcon;
+            else if (type === 'tmb_metro') icon = tmbMetroIcon;
+            else if (type === 'tram' || type === 'tram_alicante') icon = tramIcon;
+            else if (type === 'metrobus') icon = metrobusIcon;
+            else icon = metroIcon;
         } else {
             if (types.includes('bus') && types.includes('metrobus') && types.length === 2) {
                 icon = createHybridIcon('#ef4444', '#FFB81C');
@@ -1380,6 +1396,7 @@ function renderJourneyResults(routes) {
                 if (agencyName.toLowerCase().includes('emt')) defaultColor = '#ef4444';
                 else if (agencyName.toLowerCase().includes('metrobus')) defaultColor = '#FFB81C';
                 else if (agencyName.toLowerCase().includes('tram')) defaultColor = '#f97316';
+                else if (agencyName.toLowerCase().includes('tmb')) defaultColor = '#E2001A';
                 
                 let lineDisplay = leg.routeShortName || leg.route || "";
                 if (lineDisplay && !lineDisplay.startsWith('L') && !agencyName.toLowerCase().includes('emt') && !agencyName.toLowerCase().includes('metrobus')) {

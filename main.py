@@ -832,7 +832,7 @@ async def get_eta(id: str, type: str, response: Response = None):
             arrivals = await fetch_fgv_eta(id, "A", "tram_alicante-")
         elif type == "metrobus":
             arrivals = await fetch_metrobus_eta(id)
-        elif type == "tmb":
+        elif type.startswith("tmb"):
             parts = id.split("_")
             if len(parts) == 2:
                 arrivals = await fetch_tmb_eta(parts[0], parts[1])
