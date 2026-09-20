@@ -407,7 +407,10 @@ TMB_APP_ID = "22b90d81"
 TMB_APP_KEY = "529556e542a70f94952dab25eac1bb7f"
 
 async def fetch_tmb_eta(line: str, stop_code: str):
-    url = f"https://api.tmb.cat/v1/ibus/lines/{line}/stops/{stop_code}?app_id={TMB_APP_ID}&app_key={TMB_APP_KEY}"
+    if line == "tmb":
+        url = f"https://api.tmb.cat/v1/ibus/stops/{stop_code}?app_id={TMB_APP_ID}&app_key={TMB_APP_KEY}"
+    else:
+        url = f"https://api.tmb.cat/v1/ibus/lines/{line}/stops/{stop_code}?app_id={TMB_APP_ID}&app_key={TMB_APP_KEY}"
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=2.5) as resp:

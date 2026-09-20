@@ -17,22 +17,7 @@ L.control.zoom({
     position: 'bottomright'
 }).addTo(map);
 
-// Geolocation center
-map.locate({setView: true, maxZoom: 16});
-map.on('locationfound', (e) => {
-    // add a small dot for the user location
-    L.circleMarker(e.latlng, {
-        radius: 6,
-        fillColor: "#007AFF",
-        color: "#ffffff",
-        weight: 2,
-        opacity: 1,
-        fillOpacity: 1
-    }).addTo(map);
-});
-map.on('locationerror', (e) => {
-    console.warn("Could not find location:", e.message);
-});
+
 
 // Custom Icons
 const createIcon = (color) => {
@@ -547,7 +532,10 @@ async function loadStopData(marker, stop, filterLine = null) {
     const isTram = (stop.type === 'tram' || stop.type === 'tram_alicante');
     const isMetrobus = stop.type === 'metrobus';
     const isMetro = stop.type === 'metro';
-    const typeLabel = isBus ? "EMT Autobús" : (isTram ? "TRAM d'Alacant" : (isMetrobus ? "Metrobús" : "Metrovalencia"));
+    const typeLabel = isBus ? "EMT Autobús" : 
+                      (stop.type === 'tmb_bus' ? "TMB Autobús" : 
+                      (stop.type === 'tmb_metro' ? "TMB Metro" : 
+                      (isTram ? "TRAM d'Alacant" : (isMetrobus ? "Metrobús" : "Metrovalencia"))));
     
     // Set loading content
     popup.setContent(`
@@ -656,7 +644,7 @@ async function loadClusterData(marker, activeMembers) {
     
     // Combine names uniquely
     const names = [...new Set(activeMembers.map(m => m.name))].join(' / ');
-    const types = [...new Set(activeMembers.map(m => m.type === 'bus' ? 'EMT' : (m.type === 'metrobus' ? 'Metrobús' : (m.type === 'tram' || m.type === 'tram_alicante' ? 'TRAM' : 'Metrovalencia'))))].join(' + ');
+    const types = [...new Set(activeMembers.map(m => m.type === 'bus' ? 'EMT' : (m.type === 'tmb_bus' ? 'TMB Bus' : (m.type === 'tmb_metro' ? 'TMB Metro' : (m.type === 'metrobus' ? 'Metrobús' : (m.type === 'tram' || m.type === 'tram_alicante' ? 'TRAM' : 'Metrovalencia'))))))].join(' + ');
     
     popup.setContent(`
         <div class="popup-title">${names}</div>
@@ -1410,6 +1398,8 @@ function renderJourneyResults(routes) {
                     badgeColor = typeof tramColors !== 'undefined' && tramColors[lineDisplay] ? tramColors[lineDisplay] : '#f97316';
                 } else if (agencyName.toLowerCase().includes('emt')) {
                     badgeColor = '#ef4444';
+                } else if (agencyName.toLowerCase().includes('tmb')) {
+                    badgeColor = leg.mode === 'BUS' ? '#E2001A' : (typeof tmbMetroColors !== 'undefined' && tmbMetroColors[lineDisplay] ? tmbMetroColors[lineDisplay] : '#E2001A');
                 } else if (agencyName.toLowerCase().includes('metrobus')) {
                     badgeColor = '#FFB81C';
                 }
@@ -1474,6 +1464,8 @@ function renderJourneyResults(routes) {
                             color = typeof tramColors !== 'undefined' && tramColors[lineDisplay] ? tramColors[lineDisplay] : (leg.color ? `#${leg.color}` : '#f97316');
                         } else if (agencyLower.includes('emt')) {
                             color = '#ef4444';
+                        } else if (agencyLower.includes('tmb')) {
+                            color = leg.mode === 'BUS' ? '#E2001A' : (typeof tmbMetroColors !== 'undefined' && tmbMetroColors[lineDisplay] ? tmbMetroColors[lineDisplay] : '#E2001A');
                         } else if (agencyLower.includes('metrobus')) {
                             color = '#FFB81C';
                         } else {
