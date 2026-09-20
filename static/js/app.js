@@ -562,13 +562,15 @@ async function loadStopData(marker, stop, filterLine = null) {
                 const hasTheoretical = arrivals.some(a => a.realtime === false);
                 const lineClass = isBus ? 'bus-line' : (isTram ? 'tram-line' : (isMetrobus ? 'metrobus-line' : 'metro-line'));
                 linesHtml = arrivals.map(arrival => {
-                    const colorsMap = isTram ? tramColors : metroColors;
                     let badgeStyle = '';
-                    if (isTram && colorsMap[arrival.line]) badgeStyle = `background-color: ${colorsMap[arrival.line]}; color: white; border: none;`;
-                    else if (!isBus && !isMetrobus && colorsMap[arrival.line]) badgeStyle = `background-color: ${colorsMap[arrival.line]}; color: white; border: none;`;
+                    if (isTram && tramColors[arrival.line]) badgeStyle = `background-color: ${tramColors[arrival.line]}; color: white; border: none;`;
+                    else if (isMetro && metroColors[arrival.line]) badgeStyle = `background-color: ${metroColors[arrival.line]}; color: white; border: none;`;
+                    else if (stop.type === 'tmb_metro' && typeof tmbMetroColors !== 'undefined' && tmbMetroColors[arrival.line]) badgeStyle = `background-color: ${tmbMetroColors[arrival.line]}; color: white; border: none;`;
+                    else if (stop.type === 'tmb_bus' || stop.type === 'tmb_metro') badgeStyle = 'background-color: #E2001A; color: white; border: none;';
                     else if (isMetrobus) badgeStyle = 'background-color: #FFB81C; color: black; border: none;';
+                    else if (isBus) badgeStyle = 'background-color: #ef4444; color: white; border: none;';
                     
-                    let displayEta = arrival.eta;
+                    let displayEta = String(arrival.eta);
                     let iconHtml = arrival.realtime === false 
                         ? '<span style="margin-right:4px; font-size:12px;" title="Horário Teórico">📅</span> ' 
                         : '<span style="margin-right:4px; font-size:12px; color:#10b981;" title="Tempo Real (GPS)">📡</span> ';
@@ -743,17 +745,22 @@ async function loadClusterData(marker, activeMembers) {
         let isTram = (arrival._parentType === 'tram' || arrival._parentType === 'tram_alicante');
         let isMetrobus = arrival._parentType === 'metrobus';
         let isMetro = arrival._parentType === 'metro';
+        let isTmbBus = arrival._parentType === 'tmb_bus';
+        let isTmbMetro = arrival._parentType === 'tmb_metro';
         
         if (arrival.realtime === false) hasTheoretical = true;
         
-        const lineClass = isBus ? 'bus-line' : (isTram ? 'tram-line' : (isMetrobus ? 'metrobus-line' : 'metro-line'));
-        const colorsMap = isTram ? tramColors : metroColors;
-        let badgeStyle = '';
-        if (isTram && colorsMap[arrival.line]) badgeStyle = `background-color: ${colorsMap[arrival.line]}; color: white; border: none;`;
-        else if (!isBus && !isMetrobus && colorsMap[arrival.line]) badgeStyle = `background-color: ${colorsMap[arrival.line]}; color: white; border: none;`;
-        else if (isMetrobus) badgeStyle = 'background-color: #FFB81C; color: black; border: none;';
+        const lineClass = (isBus || isTmbBus) ? 'bus-line' : (isTram ? 'tram-line' : (isMetrobus ? 'metrobus-line' : 'metro-line'));
         
-        let displayEta = arrival.eta;
+        let badgeStyle = '';
+        if (isTram && tramColors[arrival.line]) badgeStyle = `background-color: ${tramColors[arrival.line]}; color: white; border: none;`;
+        else if (isMetro && metroColors[arrival.line]) badgeStyle = `background-color: ${metroColors[arrival.line]}; color: white; border: none;`;
+        else if (isTmbMetro && typeof tmbMetroColors !== 'undefined' && tmbMetroColors[arrival.line]) badgeStyle = `background-color: ${tmbMetroColors[arrival.line]}; color: white; border: none;`;
+        else if (isTmbBus || isTmbMetro) badgeStyle = 'background-color: #E2001A; color: white; border: none;';
+        else if (isMetrobus) badgeStyle = 'background-color: #FFB81C; color: black; border: none;';
+        else if (isBus) badgeStyle = 'background-color: #ef4444; color: white; border: none;';
+        
+        let displayEta = String(arrival.eta);
         let iconHtml = arrival.realtime === false 
             ? '<span style="margin-right:4px; font-size:12px;" title="Horário Teórico">📅</span> ' 
             : '<span style="margin-right:4px; font-size:12px; color:#10b981;" title="Tempo Real (GPS)">📡</span> ';
