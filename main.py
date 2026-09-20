@@ -39,7 +39,7 @@ def haversine_distance(lat1, lon1, lat2, lon2):
     a = math.sin(dphi/2.0)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2.0)**2
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1-a))
 
-app = FastAPI(title="ViaVLC API")
+app = FastAPI(title="Tranzi API")
 
 try:
     with open("metro_wp_mapping.json", "r") as f:
@@ -958,7 +958,7 @@ def parse_time_str(time_str):
 async def fetch_osrm_walk(lat1, lon1, lat2, lon2):
     try:
         url = f"http://router.project-osrm.org/route/v1/foot/{lon1},{lat1};{lon2},{lat2}?overview=false"
-        req = urllib.request.Request(url, headers={'User-Agent': 'ViaVLC/1.0'})
+        req = urllib.request.Request(url, headers={'User-Agent': 'Tranzi/1.0'})
         resp = await asyncio.to_thread(urllib.request.urlopen, req, timeout=2)
         data = json.loads(resp.read().decode('utf-8'))
         if data.get('code') == 'Ok' and data.get('routes'):

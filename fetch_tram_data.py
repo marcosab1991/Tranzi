@@ -33,7 +33,7 @@ def fetch_tram_data():
     """
     url_overpass = 'https://lz4.overpass-api.de/api/interpreter'
     data = urllib.parse.urlencode({'data': query}).encode('utf-8')
-    req = urllib.request.Request(url_overpass, data=data, headers={'User-Agent': 'ViaVLC-App/1.0'})
+    req = urllib.request.Request(url_overpass, data=data, headers={'User-Agent': 'Tranzi-App/1.0'})
     res = json.loads(urllib.request.urlopen(req, timeout=15).read().decode('utf-8'))
     
     routes_json = {"elements": []}

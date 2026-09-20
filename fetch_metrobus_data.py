@@ -20,7 +20,7 @@ def fetch_metrobus_data():
     
     url = 'https://lz4.overpass-api.de/api/interpreter'
     data = urllib.parse.urlencode({'data': query}).encode('utf-8')
-    req = urllib.request.Request(url, data=data, headers={'User-Agent': 'ViaVLC-App/1.0'})
+    req = urllib.request.Request(url, data=data, headers={'User-Agent': 'Tranzi-App/1.0'})
     
     try:
         res = urllib.request.urlopen(req).read().decode('utf-8')
